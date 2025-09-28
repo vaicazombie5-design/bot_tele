@@ -253,7 +253,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     # Tìm link Shopee/Lazada trong tin nhắn
     shopee_pattern = r'(https?://(?:shopee\.vn|shp\.ee|vn\.shp\.ee)/\S+)'
-    lazada_pattern = r'(https?://(?:lazada\.vn|lzd\.co|m\.lazada\.vn|s\.lazada\.vn)/\S+)'
+    lazada_pattern = r'(https?://(?:lazada\.vn|www\.lazada\.vn|lzd\.co|m\.lazada\.vn|s\.lazada\.vn)/\S+)'
     
     shopee_matches = re.findall(shopee_pattern, message.text)
     lazada_matches = re.findall(lazada_pattern, message.text)
@@ -300,7 +300,7 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
     if platform == "shopee" and "shopee.vn" not in link:
         await processing_message.edit_text("❌ Link Shopee không hợp lệ!")
         return
-    elif platform == "lazada" and "lazada.vn" not in link:
+    elif platform == "lazada" and not any(domain in link for domain in ["lazada.vn", "www.lazada.vn"]):
         await processing_message.edit_text("❌ Link Lazada không hợp lệ!")
         return
 
@@ -391,7 +391,7 @@ async def process_link(update: Update, link: str) -> None:
     # Kiểm tra xem có phải Shopee/Lazada không
     if "shopee.vn" in link or "shp.ee" in link or "vn.shp.ee" in link:
         await process_affiliate_link(update, link, "shopee")
-    elif "lazada.vn" in link or "lzd.co" in link or "m.lazada.vn" in link or "s.lazada.vn" in link:
+    elif any(domain in link for domain in ["lazada.vn", "www.lazada.vn", "lzd.co", "m.lazada.vn", "s.lazada.vn"]):
         await process_affiliate_link(update, link, "lazada")
     else:
         # Link khác → tạo QR trực tiếp
