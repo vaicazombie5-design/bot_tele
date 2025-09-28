@@ -1,0 +1,6 @@
+discord.py
+python-telegram-bot[all]
+aiohttp
+qrcode
+Pillow
+python-dotenv
