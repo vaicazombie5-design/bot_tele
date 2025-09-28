@@ -315,7 +315,7 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
         loop = asyncio.get_event_loop()
         qr_image = await loop.run_in_executor(None, generate_qr_code, link)
         
-        result_text = f"⚠️ QR của {platform.title()} link gốc:\n`{link}`"
+        result_text = f"⚠️ QR của {platform.title()} link gốc:\n{link}"
         
         try:
             await update.message.reply_photo(
@@ -336,7 +336,7 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
     qr_image = await loop.run_in_executor(None, generate_qr_code, short_link)
     
     # Gửi kết quả với QR code
-    result_text = f"✅ QR của {platform.title()} link:\n`{short_link}`"
+    result_text = f"✅ QR của {platform.title()} link:\n{short_link}"
     
     try:
         await update.message.reply_photo(
@@ -352,7 +352,7 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
         
     except Exception as e:
         print(f"❌ [{BOT_INSTANCE_ID}] Lỗi gửi QR code: {e}")
-        await processing_message.edit_text(f"✅ {platform.title()} link đã rút gọn:\n`{short_link}`\n\n❌ Không thể tạo QR code.", parse_mode='Markdown')
+        await processing_message.edit_text(f"✅ {platform.title()} link đã rút gọn:\n{short_link}\n\n❌ Không thể tạo QR code.", parse_mode='Markdown')
 
 # 🎯 Tạo QR cho nội dung bất kỳ
 async def create_qr_for_content(update: Update, content: str) -> None:
@@ -368,7 +368,11 @@ async def create_qr_for_content(update: Update, content: str) -> None:
         qr_image = await loop.run_in_executor(None, generate_qr_code, content)
         
         # Gửi kết quả với QR code
-        result_text = f"✅ QR của nội dung:\n`{content}`"
+        # Kiểm tra xem có phải là link không
+        if content.startswith(('http://', 'https://')):
+            result_text = f"✅ QR của link:\n{content}"
+        else:
+            result_text = f"✅ QR của nội dung:\n`{content}`"
         
         await update.message.reply_photo(
             photo=InputFile(qr_image, filename="qrcode.png"),
@@ -383,7 +387,11 @@ async def create_qr_for_content(update: Update, content: str) -> None:
         
     except Exception as e:
         print(f"❌ [{BOT_INSTANCE_ID}] Lỗi tạo QR code: {e}")
-        await processing_message.edit_text(f"❌ Không thể tạo QR code cho nội dung:\n`{content}`", parse_mode='Markdown')
+        # Kiểm tra xem có phải là link không để format phù hợp
+        if content.startswith(('http://', 'https://')):
+            await processing_message.edit_text(f"❌ Không thể tạo QR code cho link:\n{content}", parse_mode='Markdown')
+        else:
+            await processing_message.edit_text(f"❌ Không thể tạo QR code cho nội dung:\n`{content}`", parse_mode='Markdown')
 
 # 🔁 Wrapper cho process_link (để tương thích ngược)
 async def process_link(update: Update, link: str) -> None:
