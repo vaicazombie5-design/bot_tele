@@ -192,14 +192,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text += "• **Link khác/Text** → Tạo QR trực tiếp\n\n"
     welcome_text += "💡 Chỉ cần gửi bất kỳ nội dung gì, bot sẽ tạo QR code cho bạn!"
     
-    await update.message.reply_text(welcome_text, parse_mode='Markdown')
+    await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_to_message_id=update.message.message_id)
     print(f'✅ [{BOT_INSTANCE_ID}] Bot đã được khởi động bởi user: {update.effective_user.first_name}')
 
 # ✅ Lệnh thủ công: /rutgon <link>
 async def rutgon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Xử lý lệnh /rutgon để rút gọn link thủ công."""
     if not context.args:
-        await update.message.reply_text("❌ Vui lòng cung cấp link!\nVí dụ: `/rutgon https://shopee.vn/...`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Vui lòng cung cấp link!\nVí dụ: `/rutgon https://shopee.vn/...`", parse_mode='Markdown', reply_to_message_id=update.message.message_id)
         return
     
     link = ' '.join(context.args)
@@ -224,7 +224,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     status_text += f"• `/status` - Kiểm tra trạng thái bot\n"
     status_text += f"• **Gửi bất kỳ gì** - Tạo QR code\n"
     
-    await update.message.reply_text(status_text, parse_mode='Markdown')
+    await update.message.reply_text(status_text, parse_mode='Markdown', reply_to_message_id=update.message.message_id)
 
 # 📩 Tự động xử lý mọi tin nhắn
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -321,7 +321,8 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
             await update.message.reply_photo(
                 photo=InputFile(qr_image, filename="qrcode.png"),
                 caption=result_text,
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_to_message_id=update.message.message_id
             )
             await processing_message.delete()
             return
@@ -341,7 +342,8 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
         await update.message.reply_photo(
             photo=InputFile(qr_image, filename="qrcode.png"),
             caption=result_text,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
         )
         print(f"📤 [{BOT_INSTANCE_ID}] Gửi kết quả QR cho {platform} link: {short_link}")
         
@@ -371,7 +373,8 @@ async def create_qr_for_content(update: Update, content: str) -> None:
         await update.message.reply_photo(
             photo=InputFile(qr_image, filename="qrcode.png"),
             caption=result_text,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_to_message_id=update.message.message_id
         )
         print(f"📤 [{BOT_INSTANCE_ID}] Gửi QR code cho nội dung")
         
