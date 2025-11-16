@@ -252,7 +252,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     print(f"📨 [{BOT_INSTANCE_ID}] Nhận tin nhắn mới {message.message_id} từ {message.from_user.first_name}: {message.text}")
     
     # Tìm link Shopee/Lazada trong tin nhắn
-    shopee_pattern = r'(https?://(?:shopee\.vn|shp\.ee|vn\.shp\.ee)/\S+)'
+    shopee_pattern = r'(https?://(?:shopee\.vn|shp\.ee|vn\.shp\.ee|s\.shopee\.vn)/\S+)'
     lazada_pattern = r'(https?://(?:lazada\.vn|www\.lazada\.vn|lzd\.co|m\.lazada\.vn|s\.lazada\.vn)/\S+)'
     
     shopee_matches = re.findall(shopee_pattern, message.text)
@@ -282,13 +282,18 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
     # Gửi thông báo đang xử lý
     processing_message = await update.message.reply_text(f"🛒 [{BOT_INSTANCE_ID}] Đang xử lý {platform.title()} link...")
 
-    # Mở rộng link rút gọn nếu cần
-    if platform == "shopee" and "shp.ee" in link:
+    # Unshorten link rút gọn Shopee nếu cần (s.shopee.vn hoặc shp.ee)
+    unshortened_link = None
+    
+    if platform == "shopee" and ("s.shopee.vn" in link or "shp.ee" in link):
+        print(f"🔗 [{BOT_INSTANCE_ID}] Đang unshorten link Shopee: {link}")
         expanded = await expand_url(link)
         if not expanded or "shopee.vn" not in expanded:
-            await processing_message.edit_text("❌ Không thể mở rộng link rút gọn hoặc không phải Shopee!")
+            await processing_message.edit_text("❌ Không thể unshorten link hoặc không phải Shopee!")
             return
+        unshortened_link = expanded
         link = expanded
+        print(f"✅ [{BOT_INSTANCE_ID}] Link đã unshorten: {unshortened_link}")
     elif platform == "lazada" and ("lzd.co" in link or "s.lazada.vn" in link):
         expanded = await expand_url(link)
         if not expanded or "lazada.vn" not in expanded:
@@ -336,7 +341,12 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
     qr_image = await loop.run_in_executor(None, generate_qr_code, short_link)
     
     # Gửi kết quả với QR code
-    result_text = f"✅ QR của {platform.title()} link:\n{short_link}"
+    # Hiển thị cả link đã unshorten (nếu có) và link affiliate
+    if unshortened_link:
+        result_text = f"🔗 **Link đã unshorten:**\n{unshortened_link}\n\n"
+        result_text += f"✅ **Link affiliate (ăn hoa hồng):**\n{short_link}"
+    else:
+        result_text = f"✅ QR của {platform.title()} link:\n{short_link}"
     
     try:
         await update.message.reply_photo(
@@ -352,7 +362,12 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
         
     except Exception as e:
         print(f"❌ [{BOT_INSTANCE_ID}] Lỗi gửi QR code: {e}")
-        await processing_message.edit_text(f"✅ {platform.title()} link đã rút gọn:\n{short_link}\n\n❌ Không thể tạo QR code.", parse_mode='Markdown')
+        if unshortened_link:
+            error_text = f"🔗 **Link đã unshorten:**\n{unshortened_link}\n\n"
+            error_text += f"✅ **Link affiliate:**\n{short_link}\n\n❌ Không thể tạo QR code."
+        else:
+            error_text = f"✅ {platform.title()} link đã rút gọn:\n{short_link}\n\n❌ Không thể tạo QR code."
+        await processing_message.edit_text(error_text, parse_mode='Markdown')
 
 # 🎯 Tạo QR cho nội dung bất kỳ
 async def create_qr_for_content(update: Update, content: str) -> None:
@@ -397,7 +412,7 @@ async def create_qr_for_content(update: Update, content: str) -> None:
 async def process_link(update: Update, link: str) -> None:
     """Wrapper để tương thích với lệnh /rutgon."""
     # Kiểm tra xem có phải Shopee/Lazada không
-    if "shopee.vn" in link or "shp.ee" in link or "vn.shp.ee" in link:
+    if "shopee.vn" in link or "shp.ee" in link or "vn.shp.ee" in link or "s.shopee.vn" in link:
         await process_affiliate_link(update, link, "shopee")
     elif any(domain in link for domain in ["lazada.vn", "www.lazada.vn", "lzd.co", "m.lazada.vn", "s.lazada.vn"]):
         await process_affiliate_link(update, link, "lazada")
