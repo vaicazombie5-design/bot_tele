@@ -1,5 +1,6 @@
 import logging
 import os
+import traceback
 from telegram import Update, InputFile
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 import aiohttp
@@ -29,13 +30,37 @@ processed_messages = set()  # Lưu trữ ID các message đã xử lý
 # 💾 Cache campaign ID để tránh gọi API nhiều lần
 shopee_campaign_id_cache = None
 
-# 🔍 Mở rộng link rút gọn dạng shp.ee hoặc vn.shp.ee (async)
+# 🔍 Mở rộng link rút gọn dạng shp.ee, vn.shp.ee hoặc s.shopee.vn (async)
 async def expand_url(short_url):
+    """Unshorten link bằng cách follow redirects - phiên bản đơn giản và nhanh"""
+    logging.info(f"🔗 [{BOT_INSTANCE_ID}] Đang expand: {short_url}")
+    
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
-            async with session.head(short_url, allow_redirects=True) as response:
-                return str(response.url) if response.status == 200 else None
-    except:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
+        }
+        
+        # Timeout ngắn để không làm chậm bot
+        timeout = aiohttp.ClientTimeout(total=8, connect=4)
+        connector = aiohttp.TCPConnector(ssl=False)
+        
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers, connector=connector) as session:
+            async with session.get(short_url, allow_redirects=True, max_redirects=15) as response:
+                final_url = str(response.url)
+                
+                # Kiểm tra xem đã redirect sang shopee.vn chưa
+                if "shopee.vn" in final_url:
+                    logging.info(f"✅ [{BOT_INSTANCE_ID}] Expand thành công: {final_url[:80]}...")
+                    return final_url
+                else:
+                    logging.warning(f"⚠️ [{BOT_INSTANCE_ID}] URL không phải Shopee: {final_url[:80]}...")
+                    return None
+                    
+    except asyncio.TimeoutError:
+        logging.warning(f"⏱️ [{BOT_INSTANCE_ID}] Timeout expand: {short_url}")
+        return None
+    except Exception as e:
+        logging.error(f"❌ [{BOT_INSTANCE_ID}] Lỗi expand: {type(e).__name__}: {e}")
         return None
 
 # 🔗 Rút gọn link qua AccessTrade (async)
@@ -282,18 +307,31 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
     # Gửi thông báo đang xử lý
     processing_message = await update.message.reply_text(f"🛒 [{BOT_INSTANCE_ID}] Đang xử lý {platform.title()} link...")
 
-    # Unshorten link rút gọn Shopee nếu cần (s.shopee.vn hoặc shp.ee)
+    # CHỈ unshorten link s.shopee.vn (vn.shp.ee và shp.ee gửi trực tiếp cho API)
     unshortened_link = None
     
-    if platform == "shopee" and ("s.shopee.vn" in link or "shp.ee" in link):
-        print(f"🔗 [{BOT_INSTANCE_ID}] Đang unshorten link Shopee: {link}")
+    if platform == "shopee" and "s.shopee.vn" in link:
+        print(f"🔗 [{BOT_INSTANCE_ID}] Đang unshorten s.shopee.vn: {link}")
         expanded = await expand_url(link)
-        if not expanded or "shopee.vn" not in expanded:
-            await processing_message.edit_text("❌ Không thể unshorten link hoặc không phải Shopee!")
+        print(f"📊 [{BOT_INSTANCE_ID}] Kết quả expand: {expanded}")
+        
+        if not expanded:
+            error_msg = f"❌ Không thể unshorten link!\n\nLink gốc: {link}\n\nVui lòng thử lại hoặc kiểm tra link có hợp lệ không."
+            await processing_message.edit_text(error_msg)
             return
+        
+        if "shopee.vn" not in expanded:
+            error_msg = f"❌ Link sau khi unshorten không phải Shopee!\n\nLink gốc: {link}\nLink sau unshorten: {expanded}"
+            print(f"⚠️ [{BOT_INSTANCE_ID}] {error_msg}")
+            await processing_message.edit_text(error_msg)
+            return
+        
         unshortened_link = expanded
         link = expanded
-        print(f"✅ [{BOT_INSTANCE_ID}] Link đã unshorten: {unshortened_link}")
+        print(f"✅ [{BOT_INSTANCE_ID}] Link đã unshorten thành công: {unshortened_link}")
+    elif platform == "shopee" and ("vn.shp.ee" in link or "shp.ee" in link):
+        # Link vn.shp.ee hoặc shp.ee → gửi trực tiếp cho API AccessTrade
+        print(f"📤 [{BOT_INSTANCE_ID}] Link {link} sẽ được gửi trực tiếp cho API AccessTrade (không cần unshorten)")
     elif platform == "lazada" and ("lzd.co" in link or "s.lazada.vn" in link):
         expanded = await expand_url(link)
         if not expanded or "lazada.vn" not in expanded:
@@ -301,11 +339,13 @@ async def process_affiliate_link(update: Update, link: str, platform: str) -> No
             return
         link = expanded
 
-    # Kiểm tra tính hợp lệ
-    if platform == "shopee" and "shopee.vn" not in link:
-        await processing_message.edit_text("❌ Link Shopee không hợp lệ!")
-        return
-    elif platform == "lazada" and not any(domain in link for domain in ["lazada.vn", "www.lazada.vn"]):
+    # Kiểm tra tính hợp lệ (cho phép link rút gọn Shopee như vn.shp.ee, shp.ee)
+    if platform == "shopee":
+        valid_shopee_domains = ["shopee.vn", "vn.shp.ee", "shp.ee", "s.shopee.vn"]
+        if not any(domain in link for domain in valid_shopee_domains):
+            await processing_message.edit_text("❌ Link Shopee không hợp lệ!")
+            return
+    elif platform == "lazada" and not any(domain in link for domain in ["lazada.vn", "www.lazada.vn", "lzd.co", "s.lazada.vn"]):
         await processing_message.edit_text("❌ Link Lazada không hợp lệ!")
         return
 
